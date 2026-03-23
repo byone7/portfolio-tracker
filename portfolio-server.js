@@ -27,8 +27,11 @@ const server = http.createServer((req, res) => {
 
     // Yahoo Finance 프록시
     if (req.url.startsWith('/api/yahoo/')) {
-        const symbol = decodeURIComponent(req.url.replace('/api/yahoo/', ''));
-        const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=2d`;
+        const urlParts = new URL(req.url, `http://localhost:${PORT}`);
+        const symbol = decodeURIComponent(urlParts.pathname.replace('/api/yahoo/', ''));
+        const range = urlParts.searchParams.get('range') || '2d';
+        const interval = urlParts.searchParams.get('interval') || '1d';
+        const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=${interval}&range=${range}`;
 
         https.get(yahooUrl, {
             headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' }
