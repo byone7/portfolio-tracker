@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>포트폴리오 비중 계산기</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #0f0f14;
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 24px 16px;
+        }
+        h1 {
+            font-size: 24px;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 4px;
+        }
+        .subtitle {
+            color: #888;
+            font-size: 13px;
+            margin-bottom: 24px;
+        }
+        .section {
+            background: #1a1a24;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+            border: 1px solid #2a2a3a;
+        }
+        .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #aaa;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 16px;
+        }
+        .input-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+        input, select {
+            background: #12121a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 10px 12px;
+            color: #fff;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        input:focus, select:focus {
+            border-color: #5b6ef5;
+        }
+        input::placeholder { color: #555; }
+        .ticker-input { flex: 2; }
+        .qty-input { flex: 1; }
+        .type-select { flex: 1.2; }
+        .btn {
+            padding: 10px 18px;
+            border-radius: 8px;
+            border: none;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: #5b6ef5;
+            color: #fff;
+        }
+        .btn-primary:hover { background: #4a5de0; }
+        .btn-danger {
+            background: transparent;
+            color: #f55b5b;
+            font-size: 18px;
+            padding: 6px 10px;
+        }
+        .btn-danger:hover { background: #2a1a1a; }
+        .btn-secondary {
+            background: #2a2a3a;
+            color: #ccc;
+        }
+        .btn-secondary:hover { background: #333348; }
+        .btn-row {
+            display: flex;
+            gap: 10px;
+            margin-top: 12px;
+        }
+        .api-key-input {
+            width: 100%;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        /* 포트폴리오 테이블 */
+        .portfolio-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12px;
+        }
+        .portfolio-table th {
+            text-align: left;
+            padding: 10px 12px;
+            font-size: 12px;
+            color: #888;
+            border-bottom: 1px solid #2a2a3a;
+            font-weight: 500;
+        }
+        .portfolio-table th:not(:first-child) {
+            text-align: right;
+        }
+        .portfolio-table td {
+            padding: 12px;
+            font-size: 14px;
+            border-bottom: 1px solid #1f1f2f;
+        }
+        .portfolio-table td:not(:first-child) {
+            text-align: right;
+        }
+        .ticker-name {
+            font-weight: 600;
+            color: #fff;
+        }
+        .ticker-sub {
+            font-size: 12px;
+            color: #888;
+        }
+        .positive { color: #4ecb71; }
+        .negative { color: #f55b5b; }
+        /* 비중 바 */
+        .weight-bar-container {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+        .weight-bar {
+            width: 80px;
+            height: 8px;
+            background: #2a2a3a;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .weight-bar-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.5s ease;
+        }
+        .weight-pct {
+            font-weight: 600;
+            min-width: 48px;
+            text-align: right;
+        }
+        /* 차트 */
+        .chart-container {
+            display: flex;
+            justify-content: center;
+            padding: 20px 0;
+        }
+        canvas { max-width: 280px; max-height: 280px; }
+        /* 총합 */
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 16px 0;
+            border-top: 2px solid #2a2a3a;
+            margin-top: 8px;
+            font-size: 18px;
+            font-weight: 700;
+        }
+        .total-value { color: #5b6ef5; }
+        /* 리밸런싱 */
+        .advice-box {
+            background: #12121a;
+            border-radius: 8px;
+            padding: 16px;
+            line-height: 1.7;
+            font-size: 14px;
+            white-space: pre-wrap;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        .advice-box p { margin-bottom: 8px; }
+        .loading {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #888;
+        }
+        .spinner {
+            width: 16px; height: 16px;
+            border: 2px solid #333;
+            border-top-color: #5b6ef5;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #555;
+        }
+        .tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .tag-stock { background: #1a2a4a; color: #5b9ef5; }
+        .tag-gold { background: #3a2a1a; color: #f5c85b; }
+        .error-msg {
+            color: #f55b5b;
+            font-size: 13px;
+            margin-top: 8px;
+        }
+        @media (max-width: 600px) {
+            .input-row { flex-wrap: wrap; }
+            .ticker-input, .qty-input, .type-select { flex: 1 1 100%; }
+            .weight-bar { width: 50px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Portfolio Tracker</h1>
+        <p class="subtitle">실시간 주가 기반 포트폴리오 비중 계산 & AI 리밸런싱 조언</p>
+
+        <!-- 종목 입력 -->
+        <div class="section">
+            <div class="section-title">종목 추가</div>
+            <div id="inputRows">
+                <div class="input-row">
+                    <input type="text" class="ticker-input" placeholder="티커 (예: AAPL, TSLA)" id="tickerInput">
+                    <input type="number" class="qty-input" placeholder="수량" id="qtyInput" min="0" step="any">
+                    <select class="type-select" id="typeSelect">
+                        <option value="stock">미국 주식</option>
+                        <option value="gold">KRX 금현물 (g)</option>
+                    </select>
+                    <button class="btn btn-primary" onclick="addHolding()">추가</button>
+                </div>
+            </div>
+            <div id="errorMsg" class="error-msg" style="display:none;"></div>
+            <div class="btn-row">
+                <button class="btn btn-secondary" onclick="fetchAllPrices()">🔄 가격 새로고침</button>
+                <button class="btn btn-secondary" onclick="clearAll()">전체 삭제</button>
+            </div>
+        </div>
+
+        <!-- 포트폴리오 현황 -->
+        <div class="section">
+            <div class="section-title">포트폴리오 현황</div>
+            <div id="portfolioContent">
+                <div class="empty-state">종목을 추가해주세요</div>
+            </div>
+        </div>
+
+        <!-- 비중 차트 -->
+        <div class="section" id="chartSection" style="display:none;">
+            <div class="section-title">비중 차트</div>
+            <div class="chart-container">
+                <canvas id="pieChart" width="280" height="280"></canvas>
+            </div>
+        </div>
+
+        <!-- 리밸런싱 조언 -->
+        <div class="section">
+            <div class="section-title">AI 리밸런싱 조언</div>
+            <div style="margin-bottom: 12px;">
+                <input type="password" class="api-key-input" id="apiKeyInput"
+                    placeholder="Anthropic API Key (sk-ant-...)"
+                    style="width:100%; margin-bottom:10px;">
+                <div style="display:flex; gap:8px;">
+                    <button class="btn btn-primary" onclick="getAdvice()" id="adviceBtn">조언 받기</button>
+                    <label style="display:flex;align-items:center;gap:6px;color:#888;font-size:13px;">
+                        <input type="checkbox" id="saveKeyCheck"> 키 저장 (로컬)
+                    </label>
+                </div>
+            </div>
+            <div id="adviceContent" class="advice-box" style="display:none;"></div>
+        </div>
+    </div>
+
+    <script>
+        // ============ State ============
+        let holdings = JSON.parse(localStorage.getItem('holdings') || '[]');
+        const COLORS = ['#5b6ef5','#f5c85b','#4ecb71','#f55b5b','#a85bf5','#5bc8f5','#f5875b','#8bf55b','#f55ba8','#5bf5e0'];
+        const API_BASE = window.location.origin;
+
+        // ============ Init ============
+        window.onload = () => {
+            const savedKey = localStorage.getItem('apiKey');
+            if (savedKey) {
+                document.getElementById('apiKeyInput').value = savedKey;
+                document.getElementById('saveKeyCheck').checked = true;
+            }
+            if (holdings.length > 0) {
+                fetchAllPrices();
+            }
+            renderPortfolio();
+        };
+
+        // ============ Holdings Management ============
+        function addHolding() {
+            const tickerEl = document.getElementById('tickerInput');
+            const qtyEl = document.getElementById('qtyInput');
+            const typeEl = document.getElementById('typeSelect');
+            const errEl = document.getElementById('errorMsg');
+
+            const ticker = tickerEl.value.trim().toUpperCase();
+            const qty = parseFloat(qtyEl.value);
+            const type = typeEl.value;
+
+            if (!ticker || isNaN(qty) || qty <= 0) {
+                errEl.textContent = '티커와 수량을 올바르게 입력해주세요.';
+                errEl.style.display = 'block';
+                return;
+            }
+
+            const existing = holdings.find(h => h.ticker === ticker && h.type === type);
+            if (existing) {
+                existing.qty = qty;
+            } else {
+                holdings.push({ ticker, qty, type, price: null, prevClose: null, name: '' });
+            }
+
+            errEl.style.display = 'none';
+            tickerEl.value = '';
+            qtyEl.value = '';
+            saveHoldings();
+            fetchPrice(holdings.length - 1);
+            renderPortfolio();
+        }
+
+        function removeHolding(idx) {
+            holdings.splice(idx, 1);
+            saveHoldings();
+            renderPortfolio();
+        }
+
+        function clearAll() {
+            holdings = [];
+            saveHoldings();
+            renderPortfolio();
+        }
+
+        function saveHoldings() {
+            localStorage.setItem('holdings', JSON.stringify(holdings));
+        }
+
+        // ============ Price Fetching ============
+        async function fetchPrice(idx) {
+            const h = holdings[idx];
+            if (!h) return;
+
+            try {
+                if (h.type === 'gold') {
+                    await fetchGoldPrice(h);
+                } else {
+                    await fetchStockPrice(h);
+                }
+                saveHoldings();
+                renderPortfolio();
+            } catch (e) {
+                console.error(`Error fetching ${h.ticker}:`, e);
+                h.price = null;
+                renderPortfolio();
+            }
+        }
+
+        async function fetchStockPrice(h) {
+            const res = await fetch(`${API_BASE}/api/yahoo/${encodeURIComponent(h.ticker)}`);
+            const data = await res.json();
+            const result = data.chart?.result?.[0];
+            if (!result) throw new Error('Ticker not found');
+
+            const meta = result.meta;
+            h.price = meta.regularMarketPrice;
+            h.prevClose = meta.chartPreviousClose || meta.previousClose;
+            h.name = meta.shortName || meta.symbol || h.ticker;
+            h.currency = meta.currency || 'USD';
+        }
+
+        async function fetchGoldPrice(h) {
+            // 국제 금 시세 (USD/oz)
+            const res = await fetch(`${API_BASE}/api/yahoo/${encodeURIComponent('GC=F')}`);
+            const data = await res.json();
+            const result = data.chart?.result?.[0];
+            if (!result) throw new Error('Gold price not found');
+
+            const goldUsdOz = result.meta.regularMarketPrice;
+            const prevGoldUsdOz = result.meta.chartPreviousClose || result.meta.previousClose;
+
+            // USD/KRW 환율
+            const fxRes = await fetch(`${API_BASE}/api/yahoo/${encodeURIComponent('USDKRW=X')}`);
+            const fxData = await fxRes.json();
+            const usdkrw = fxData.chart?.result?.[0]?.meta?.regularMarketPrice || 1350;
+
+            // 1 troy oz = 31.1035g → KRW/g 변환
+            const krwPerGram = (goldUsdOz * usdkrw) / 31.1035;
+            const prevKrwPerGram = (prevGoldUsdOz * usdkrw) / 31.1035;
+
+            h.ticker = 'KRX금현물';
+            h.price = Math.round(krwPerGram);
+            h.prevClose = Math.round(prevKrwPerGram);
+            h.name = 'KRX 금현물';
+            h.currency = 'KRW';
+        }
+
+        async function fetchAllPrices() {
+            const promises = holdings.map((_, i) => fetchPrice(i));
+            await Promise.allSettled(promises);
+            renderPortfolio();
+        }
+
+        // ============ Rendering ============
+        function renderPortfolio() {
+            const container = document.getElementById('portfolioContent');
+            const chartSection = document.getElementById('chartSection');
+
+            if (holdings.length === 0) {
+                container.innerHTML = '<div class="empty-state">종목을 추가해주세요</div>';
+                chartSection.style.display = 'none';
+                return;
+            }
+
+            // 총 가치 계산 (USD 기준 통일)
+            let totalValueUSD = 0;
+            const values = holdings.map(h => {
+                if (!h.price) return 0;
+                const raw = h.price * h.qty;
+                return raw;
+            });
+
+            // 통화별 그룹 계산
+            const holdingsWithValue = holdings.map((h, i) => ({
+                ...h, idx: i,
+                value: h.price ? h.price * h.qty : 0,
+                change: h.price && h.prevClose ? ((h.price - h.prevClose) / h.prevClose * 100) : 0
+            }));
+
+            const totalValue = holdingsWithValue.reduce((s, h) => s + h.value, 0);
+
+            let html = `<table class="portfolio-table">
+                <thead><tr>
+                    <th>종목</th>
+                    <th>현재가</th>
+                    <th>수량</th>
+                    <th>평가금액</th>
+                    <th>등락</th>
+                    <th>비중</th>
+                    <th></th>
+                </tr></thead><tbody>`;
+
+            holdingsWithValue.forEach((h, i) => {
+                const weight = totalValue > 0 ? (h.value / totalValue * 100) : 0;
+                const changeClass = h.change >= 0 ? 'positive' : 'negative';
+                const changeSign = h.change >= 0 ? '+' : '';
+                const currSymbol = h.currency === 'KRW' ? '₩' : '$';
+                const priceStr = h.price ? (h.currency === 'KRW' ?
+                    currSymbol + h.price.toLocaleString() :
+                    currSymbol + h.price.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})) : '-';
+                const valueStr = h.price ? (h.currency === 'KRW' ?
+                    currSymbol + Math.round(h.value).toLocaleString() :
+                    currSymbol + h.value.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})) : '-';
+                const tagClass = h.type === 'gold' ? 'tag-gold' : 'tag-stock';
+                const tagText = h.type === 'gold' ? '금' : '주식';
+
+                html += `<tr>
+                    <td>
+                        <div class="ticker-name">${h.ticker}</div>
+                        <div class="ticker-sub">${h.name} <span class="tag ${tagClass}">${tagText}</span></div>
+                    </td>
+                    <td>${priceStr}</td>
+                    <td>${h.type === 'gold' ? h.qty + 'g' : h.qty + '주'}</td>
+                    <td>${valueStr}</td>
+                    <td class="${changeClass}">${h.price ? changeSign + h.change.toFixed(2) + '%' : '-'}</td>
+                    <td>
+                        <div class="weight-bar-container">
+                            <div class="weight-bar">
+                                <div class="weight-bar-fill" style="width:${weight}%;background:${COLORS[i % COLORS.length]}"></div>
+                            </div>
+                            <span class="weight-pct">${weight.toFixed(1)}%</span>
+                        </div>
+                    </td>
+                    <td><button class="btn btn-danger" onclick="removeHolding(${h.idx})">✕</button></td>
+                </tr>`;
+            });
+
+            html += '</tbody></table>';
+
+            // 통화별 총합
+            const byCurrency = {};
+            holdingsWithValue.forEach(h => {
+                if (!byCurrency[h.currency]) byCurrency[h.currency] = 0;
+                byCurrency[h.currency] += h.value;
+            });
+
+            html += '<div class="total-row">';
+            html += '<span>총 평가금액</span><div>';
+            Object.entries(byCurrency).forEach(([cur, val]) => {
+                const sym = cur === 'KRW' ? '₩' : '$';
+                const formatted = cur === 'KRW' ?
+                    sym + Math.round(val).toLocaleString() :
+                    sym + val.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                html += `<div class="total-value">${formatted}</div>`;
+            });
+            html += '</div></div>';
+
+            container.innerHTML = html;
+
+            // 차트 그리기
+            if (holdingsWithValue.some(h => h.value > 0)) {
+                chartSection.style.display = 'block';
+                drawPieChart(holdingsWithValue, totalValue);
+            }
+        }
+
+        // ============ Pie Chart (Canvas) ============
+        function drawPieChart(data, total) {
+            const canvas = document.getElementById('pieChart');
+            const ctx = canvas.getContext('2d');
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = 280 * dpr;
+            canvas.height = 280 * dpr;
+            ctx.scale(dpr, dpr);
+            ctx.clearRect(0, 0, 280, 280);
+
+            const cx = 140, cy = 140, r = 110;
+            let startAngle = -Math.PI / 2;
+
+            data.forEach((h, i) => {
+                if (h.value <= 0) return;
+                const sliceAngle = (h.value / total) * 2 * Math.PI;
+
+                ctx.beginPath();
+                ctx.moveTo(cx, cy);
+                ctx.arc(cx, cy, r, startAngle, startAngle + sliceAngle);
+                ctx.closePath();
+                ctx.fillStyle = COLORS[i % COLORS.length];
+                ctx.fill();
+
+                // 라벨
+                if (h.value / total > 0.05) {
+                    const midAngle = startAngle + sliceAngle / 2;
+                    const lx = cx + Math.cos(midAngle) * (r * 0.65);
+                    const ly = cy + Math.sin(midAngle) * (r * 0.65);
+                    ctx.fillStyle = '#fff';
+                    ctx.font = '600 12px -apple-system, sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(h.ticker, lx, ly - 8);
+                    ctx.font = '11px -apple-system, sans-serif';
+                    ctx.fillText((h.value / total * 100).toFixed(1) + '%', lx, ly + 8);
+                }
+
+                startAngle += sliceAngle;
+            });
+
+            // 도넛 홀
+            ctx.beginPath();
+            ctx.arc(cx, cy, r * 0.45, 0, Math.PI * 2);
+            ctx.fillStyle = '#1a1a24';
+            ctx.fill();
+        }
+
+        // ============ AI Advice ============
+        async function getAdvice() {
+            const apiKey = document.getElementById('apiKeyInput').value.trim();
+            if (!apiKey) {
+                alert('Anthropic API Key를 입력해주세요.');
+                return;
+            }
+
+            if (document.getElementById('saveKeyCheck').checked) {
+                localStorage.setItem('apiKey', apiKey);
+            } else {
+                localStorage.removeItem('apiKey');
+            }
+
+            if (holdings.length === 0 || !holdings.some(h => h.price)) {
+                alert('먼저 종목을 추가하고 가격을 불러와주세요.');
+                return;
+            }
+
+            const adviceEl = document.getElementById('adviceContent');
+            const btn = document.getElementById('adviceBtn');
+            adviceEl.style.display = 'block';
+            adviceEl.innerHTML = '<div class="loading"><div class="spinner"></div>AI가 분석 중입니다...</div>';
+            btn.disabled = true;
+
+            // 포트폴리오 요약 생성
+            const totalByCurrency = {};
+            const summary = holdings.filter(h => h.price).map(h => {
+                const value = h.price * h.qty;
+                if (!totalByCurrency[h.currency]) totalByCurrency[h.currency] = 0;
+                totalByCurrency[h.currency] += value;
+                const sym = h.currency === 'KRW' ? '₩' : '$';
+                return `- ${h.ticker} (${h.name}): ${h.qty}${h.type === 'gold' ? 'g' : '주'}, 현재가 ${sym}${h.price.toLocaleString()}, 평가금액 ${sym}${Math.round(value).toLocaleString()}, 전일대비 ${h.prevClose ? ((h.price - h.prevClose) / h.prevClose * 100).toFixed(2) : '?'}%`;
+            }).join('\n');
+
+            const totalStr = Object.entries(totalByCurrency).map(([c, v]) => {
+                const s = c === 'KRW' ? '₩' : '$';
+                return `${s}${Math.round(v).toLocaleString()}`;
+            }).join(' + ');
+
+            const prompt = `당신은 전문 포트폴리오 매니저입니다. 아래 포트폴리오를 분석하고 리밸런싱 조언을 해주세요.
+
+## 현재 포트폴리오
+${summary}
+
+총 평가금액: ${totalStr}
+
+## 요청사항
+1. 현재 포트폴리오의 자산 배분 평가 (주식/금 비중, 섹터 집중도, 리스크 등)
+2. 현재 시장 현황을 고려한 리밸런싱 조언 (오늘 날짜: ${new Date().toLocaleDateString('ko-KR')})
+3. 구체적인 액션 아이템 (비중 조절, 추가/매도 추천)
+4. 주의해야 할 리스크 요인
+
+간결하고 실용적으로 답변해주세요. 한국어로 답변하세요.`;
+
+            try {
+                const res = await fetch('https://api.anthropic.com/v1/messages', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-api-key': apiKey,
+                        'anthropic-version': '2023-06-01',
+                        'anthropic-dangerous-direct-browser-access': 'true'
+                    },
+                    body: JSON.stringify({
+                        model: 'claude-sonnet-4-6',
+                        max_tokens: 2048,
+                        messages: [{ role: 'user', content: prompt }]
+                    })
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.error?.message || `API 오류 (${res.status})`);
+                }
+
+                const data = await res.json();
+                const text = data.content[0].text;
+                adviceEl.innerHTML = formatMarkdown(text);
+            } catch (e) {
+                adviceEl.innerHTML = `<span style="color:#f55b5b;">오류: ${e.message}</span>`;
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        function formatMarkdown(text) {
+            return text
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/^### (.+)$/gm, '<h3 style="color:#fff;margin:16px 0 8px;font-size:16px;">$1</h3>')
+                .replace(/^## (.+)$/gm, '<h2 style="color:#fff;margin:16px 0 8px;font-size:18px;">$1</h2>')
+                .replace(/\*\*(.+?)\*\*/g, '<strong style="color:#fff;">$1</strong>')
+                .replace(/^- (.+)$/gm, '<div style="padding-left:16px;">• $1</div>')
+                .replace(/^(\d+)\. (.+)$/gm, '<div style="padding-left:16px;">$1. $2</div>')
+                .replace(/\n\n/g, '<br><br>')
+                .replace(/\n/g, '<br>');
+        }
+
+        // Enter 키 지원
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && (e.target.id === 'tickerInput' || e.target.id === 'qtyInput')) {
+                addHolding();
+            }
+        });
+    </script>
+</body>
+</html>
