@@ -176,6 +176,24 @@
             position: absolute; top: -4px; width: 2px; height: 14px; background: #fff; border-radius: 1px;
         }
 
+        /* 선물 시세 */
+        .futures-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+        .futures-card {
+            background: #12121a; border-radius: 12px; padding: 20px;
+            border: 1px solid #2a2a3a; transition: border-color 0.2s;
+        }
+        .futures-card:hover { border-color: #3a3a4a; }
+        .futures-icon { font-size: 28px; margin-bottom: 8px; }
+        .futures-name { font-size: 13px; color: #888; margin-bottom: 4px; }
+        .futures-price { font-size: 28px; font-weight: 700; color: #fff; }
+        .futures-change { font-size: 14px; font-weight: 600; margin-top: 4px; }
+        .futures-details { display: flex; gap: 16px; margin-top: 12px; padding-top: 12px; border-top: 1px solid #2a2a3a; }
+        .futures-detail-item { font-size: 12px; }
+        .futures-detail-label { color: #666; }
+        .futures-detail-value { color: #ccc; font-weight: 500; }
+        .futures-mini-chart { margin-top: 12px; }
+        .futures-mini-chart canvas { width: 100%; height: 60px; }
+
         @media (max-width: 600px) {
             .input-row { flex-wrap: wrap; }
             .ticker-input, .qty-input, .avgprice-input, .type-select { flex: 1 1 100%; }
@@ -192,6 +210,7 @@
         <div class="tabs">
             <button class="tab active" onclick="switchTab('portfolio')">포트폴리오</button>
             <button class="tab" onclick="switchTab('analysis')">매매 분석</button>
+            <button class="tab" onclick="switchTab('futures')">선물 시세</button>
         </div>
 
         <!-- ==================== 포트폴리오 탭 ==================== -->
@@ -279,6 +298,19 @@
                 </div>
             </div>
         </div>
+
+        <!-- ==================== 선물 시세 탭 ==================== -->
+        <div id="tab-futures" class="tab-content">
+            <div class="section">
+                <div class="section-title">실시간 선물 시세</div>
+                <div class="btn-row" style="margin-top:0;margin-bottom:16px;">
+                    <button class="btn btn-secondary" onclick="fetchFutures()">🔄 새로고침</button>
+                    <span id="futuresUpdated" style="color:#555;font-size:12px;display:flex;align-items:center;"></span>
+                </div>
+                <div id="futuresContent"><div class="loading"><div class="spinner"></div>데이터 로딩 중...</div></div>
+            </div>
+            <div id="futuresCharts"></div>
+        </div>
     </div>
 
     <script>
@@ -348,6 +380,12 @@
             renderPortfolio();
         }
 
+        function updateQty(idx, val) {
+            const qty = parseFloat(val);
+            if (isNaN(qty) || qty <= 0) { renderPortfolio(); return; }
+            holdings[idx].qty = qty;
+            saveHoldings(); renderPortfolio();
+        }
         function removeHolding(idx) { holdings.splice(idx, 1); saveHoldings(); renderPortfolio(); }
         function clearAll() { holdings = []; saveHoldings(); renderPortfolio(); }
         function saveHoldings() { localStorage.setItem('holdings', JSON.stringify(holdings)); }
@@ -436,7 +474,7 @@
                 html += `<tr>
                     <td><div ${clickable}>${h.ticker}</div><div class="ticker-sub">${h.name} <span class="tag ${tagClass}">${tagText}</span></div></td>
                     <td>${priceStr}</td>
-                    <td>${h.type === 'gold' ? h.qty + 'g' : h.qty + '주'}</td>
+                    <td><div style="display:flex;align-items:center;justify-content:flex-end;gap:2px;"><input type="number" value="${h.qty}" min="0" step="any" style="width:60px;padding:4px 6px;font-size:13px;text-align:right;background:#12121a;border:1px solid transparent;border-radius:4px;color:#fff;" onfocus="this.style.borderColor='#5b6ef5'" onblur="this.style.borderColor='transparent'; updateQty(${h.idx}, this.value)" onkeydown="if(event.key==='Enter'){this.blur()}"><span style="color:#888;font-size:12px;">${h.type === 'gold' ? 'g' : '주'}</span></div></td>
                     <td>${valueStr}</td>
                     <td class="${changeClass}">${h.price ? changeSign + h.change.toFixed(2) + '%' : '-'}</td>
                     <td>${h.pnl !== null ? `<div class="${h.pnl >= 0 ? 'positive' : 'negative'}">${h.pnl >= 0 ? '+' : ''}${h.pnlPct.toFixed(2)}%</div><div style="font-size:11px;color:#888;">${cs}${h.currency === 'KRW' ? Math.round(h.pnl).toLocaleString() : h.pnl.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div>` : '<span style="color:#555;">-</span>'}</td>
@@ -1120,6 +1158,143 @@
 
             el.innerHTML = html;
         }
+
+        // ============ 선물 시세 ============
+        const FUTURES = [
+            { symbol: 'NQ=F', name: '나스닥 100 선물', icon: '📈', unit: '' },
+            { symbol: 'CL=F', name: 'WTI 원유 선물', icon: '🛢️', unit: '/배럴' },
+            { symbol: 'GC=F', name: '금 선물', icon: '🥇', unit: '/온스' },
+        ];
+        let futuresInterval = null;
+
+        async function fetchFutures() {
+            const content = document.getElementById('futuresContent');
+            const chartsEl = document.getElementById('futuresCharts');
+
+            const results = await Promise.allSettled(FUTURES.map(async (f) => {
+                const res = await fetch(`${API_BASE}/api/yahoo/${encodeURIComponent(f.symbol)}?range=5d&interval=15m`);
+                const data = await res.json();
+                const result = data.chart?.result?.[0];
+                if (!result) throw new Error('Not found');
+                return { ...f, data: result };
+            }));
+
+            let cardsHtml = '<div class="futures-grid">';
+            let chartsHtml = '';
+
+            results.forEach((r, i) => {
+                if (r.status !== 'fulfilled') {
+                    cardsHtml += `<div class="futures-card"><div class="futures-name">${FUTURES[i].name}</div><div style="color:#f55b5b;">로딩 실패</div></div>`;
+                    return;
+                }
+                const { name, icon, unit, data } = r.value;
+                const meta = data.meta;
+                const price = meta.regularMarketPrice;
+                const prevClose = meta.chartPreviousClose || meta.previousClose;
+                const change = price - prevClose;
+                const changePct = (change / prevClose * 100);
+                const isUp = change >= 0;
+                const closes = data.indicators.quote[0].close.filter(v => v !== null);
+                const high = meta.regularMarketDayHigh || Math.max(...closes.slice(-30));
+                const low = meta.regularMarketDayLow || Math.min(...closes.slice(-30));
+                const currency = meta.currency || 'USD';
+                const cs = currency === 'KRW' ? '₩' : '$';
+
+                const canvasId = `futuresChart_${i}`;
+
+                cardsHtml += `<div class="futures-card">
+                    <div class="futures-icon">${icon}</div>
+                    <div class="futures-name">${name}</div>
+                    <div class="futures-price">${cs}${price.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}${unit}</div>
+                    <div class="futures-change ${isUp ? 'positive' : 'negative'}">${isUp ? '+' : ''}${change.toFixed(2)} (${isUp ? '+' : ''}${changePct.toFixed(2)}%)</div>
+                    <div class="futures-mini-chart"><canvas id="${canvasId}"></canvas></div>
+                    <div class="futures-details">
+                        <div class="futures-detail-item"><div class="futures-detail-label">고가</div><div class="futures-detail-value">${cs}${high.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div>
+                        <div class="futures-detail-item"><div class="futures-detail-label">저가</div><div class="futures-detail-value">${cs}${low.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div>
+                        <div class="futures-detail-item"><div class="futures-detail-label">전일종가</div><div class="futures-detail-value">${cs}${prevClose.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div></div>
+                    </div>
+                </div>`;
+            });
+
+            cardsHtml += '</div>';
+            content.innerHTML = cardsHtml;
+            chartsEl.innerHTML = '';
+
+            // 미니 차트 그리기
+            results.forEach((r, i) => {
+                if (r.status !== 'fulfilled') return;
+                const closes = r.value.data.indicators.quote[0].close.filter(v => v !== null);
+                const prevClose = r.value.data.meta.chartPreviousClose || r.value.data.meta.previousClose;
+                drawMiniChart(`futuresChart_${i}`, closes, prevClose);
+            });
+
+            document.getElementById('futuresUpdated').textContent = `마지막 업데이트: ${new Date().toLocaleTimeString('ko-KR')}`;
+        }
+
+        function drawMiniChart(canvasId, data, prevClose) {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+            const parent = canvas.parentElement;
+            const W = parent.offsetWidth, H = 60;
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = W * dpr; canvas.height = H * dpr;
+            canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+            const ctx = canvas.getContext('2d');
+            ctx.scale(dpr, dpr);
+
+            const pad = 4;
+            const minV = Math.min(...data, prevClose);
+            const maxV = Math.max(...data, prevClose);
+            const range = maxV - minV || 1;
+            const toX = i => pad + (i / (data.length - 1)) * (W - pad * 2);
+            const toY = v => pad + (1 - (v - minV) / range) * (H - pad * 2);
+
+            // 전일종가 라인
+            ctx.setLineDash([3, 3]);
+            ctx.strokeStyle = '#444';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(0, toY(prevClose));
+            ctx.lineTo(W, toY(prevClose));
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // 가격 라인
+            const lastPrice = data[data.length - 1];
+            const isUp = lastPrice >= prevClose;
+            const color = isUp ? '#4ecb71' : '#f55b5b';
+
+            ctx.beginPath();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 1.5;
+            for (let i = 0; i < data.length; i++) {
+                if (i === 0) ctx.moveTo(toX(i), toY(data[i]));
+                else ctx.lineTo(toX(i), toY(data[i]));
+            }
+            ctx.stroke();
+
+            // 그라데이션 채우기
+            ctx.lineTo(toX(data.length - 1), H);
+            ctx.lineTo(toX(0), H);
+            ctx.closePath();
+            const grad = ctx.createLinearGradient(0, 0, 0, H);
+            grad.addColorStop(0, isUp ? 'rgba(78,203,113,0.15)' : 'rgba(245,91,91,0.15)');
+            grad.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = grad;
+            ctx.fill();
+        }
+
+        // 탭 전환 시 선물 데이터 로드
+        const origSwitchTab = switchTab;
+        switchTab = function(tab) {
+            origSwitchTab(tab);
+            if (tab === 'futures') {
+                fetchFutures();
+                if (!futuresInterval) futuresInterval = setInterval(fetchFutures, 30000);
+            } else {
+                if (futuresInterval) { clearInterval(futuresInterval); futuresInterval = null; }
+            }
+        };
 
         // ============ Enter 키 ============
         document.addEventListener('keydown', (e) => {
