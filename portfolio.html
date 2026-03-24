@@ -422,9 +422,11 @@
             const prevGoldUsdOz = result.meta.chartPreviousClose || result.meta.previousClose;
             const fxRes = await fetch(`${API_BASE}/api/yahoo/${encodeURIComponent('USDKRW=X')}`);
             const fxData = await fxRes.json();
-            const usdkrw = fxData.chart?.result?.[0]?.meta?.regularMarketPrice || 1350;
+            const fxMeta = fxData.chart?.result?.[0]?.meta;
+            const usdkrw = fxMeta?.regularMarketPrice || 1350;
+            const prevUsdkrw = fxMeta?.chartPreviousClose || usdkrw;
             const krwPerGram = (goldUsdOz * usdkrw) / 31.1035;
-            const prevKrwPerGram = (prevGoldUsdOz * usdkrw) / 31.1035;
+            const prevKrwPerGram = (prevGoldUsdOz * prevUsdkrw) / 31.1035;
             h.ticker = 'KRX금현물'; h.price = Math.round(krwPerGram);
             h.prevClose = Math.round(prevKrwPerGram); h.name = 'KRX 금현물'; h.currency = 'KRW';
         }
@@ -1172,11 +1174,18 @@
             const chartsEl = document.getElementById('futuresCharts');
 
             const results = await Promise.allSettled(FUTURES.map(async (f) => {
-                const res = await fetch(`${API_BASE}/api/yahoo/${encodeURIComponent(f.symbol)}?range=5d&interval=15m`);
-                const data = await res.json();
-                const result = data.chart?.result?.[0];
-                if (!result) throw new Error('Not found');
-                return { ...f, data: result };
+                const [res1d, res5d] = await Promise.all([
+                    fetch(`${API_BASE}/api/yahoo/${encodeURIComponent(f.symbol)}?range=1d&interval=5m`),
+                    fetch(`${API_BASE}/api/yahoo/${encodeURIComponent(f.symbol)}?range=5d&interval=15m`)
+                ]);
+                const data1d = await res1d.json();
+                const data5d = await res5d.json();
+                const result1d = data1d.chart?.result?.[0];
+                const result5d = data5d.chart?.result?.[0];
+                if (!result5d) throw new Error('Not found');
+                // Use 1d prevClose for accurate change %, 5d data for chart
+                const prevClose1d = result1d?.meta?.chartPreviousClose || result1d?.meta?.previousClose;
+                return { ...f, data: result5d, prevClose1d };
             }));
 
             let cardsHtml = '<div class="futures-grid">';
@@ -1187,10 +1196,10 @@
                     cardsHtml += `<div class="futures-card"><div class="futures-name">${FUTURES[i].name}</div><div style="color:#f55b5b;">로딩 실패</div></div>`;
                     return;
                 }
-                const { name, icon, unit, data } = r.value;
+                const { name, icon, unit, data, prevClose1d } = r.value;
                 const meta = data.meta;
                 const price = meta.regularMarketPrice;
-                const prevClose = meta.chartPreviousClose || meta.previousClose;
+                const prevClose = prevClose1d || meta.chartPreviousClose || meta.previousClose;
                 const change = price - prevClose;
                 const changePct = (change / prevClose * 100);
                 const isUp = change >= 0;
