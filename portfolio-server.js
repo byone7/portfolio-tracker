@@ -19,7 +19,7 @@ const server = http.createServer((req, res) => {
 
     // 메인 페이지
     if (req.url === '/' || req.url === '/index.html') {
-        const html = fs.readFileSync(path.join(__dirname, 'portfolio.html'), 'utf8');
+        const html = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end(html);
         return;
